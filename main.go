@@ -1,48 +1,65 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+	"sync"
+
+	c "pinger/client"
 )
 
+type URLData struct {
+	ursStr string
+	status string
+}
+
+type URLDataResults struct {
+	sync.Mutex
+	results []URLData
+}
+
 func main() {
-	testGetURL()
+	r := getURLWg()
+
+	for _, ud := range r {
+		fmt.Println(ud.ursStr, ud.status)
+	}
 }
 
-func testGetURL() {
-	dst := getRequestDestination()
+func getURLWg() []URLData {
+	r := URLDataResults{results: make([]URLData, 0)}
+	dst := c.GetRequestDestination()
+
+	wg := &sync.WaitGroup{}
+	wg.Add(len(dst))
+
 	for _, url := range dst {
-		status := getReqStatus(url)
-		println(url, "\n\t", status, "\n")
+		ud := URLData{url, ""}
+
+		go func() {
+			defer wg.Done()
+			ud, err := getURLStatus(ud)
+
+			if err == nil {
+				r.Lock()
+				r.results = append(r.results, ud)
+				r.Unlock()
+			}
+		}()
 	}
+	wg.Wait()
+
+	return r.results
 }
 
-func getRequestDestination() []string {
-	r := []string{}
-	rU := getURL()
-	rP := getPATH()
-
-	for _, u := range rU {
-		for _, p := range rP {
-			r = append(r, "https://"+u+"/"+p)
-		}
-	}
-
-	return r
-}
-
-func getURL() []string {
-	return []string{"google.com", "ya.ru", "bing.com"}
-}
-
-func getPATH() []string {
-	return []string{"index.html", "robot.txt", "favicon.ico"}
-}
-
-func getReqStatus(url string) string {
-	resp, err := http.Get(url)
+func getURLStatus(urlData URLData) (URLData, error) {
+	resp, err := http.Get(urlData.ursStr)
 	if err != nil {
 		log.Fatalln(err)
+		return urlData, err
 	}
-	return resp.Status
+
+	urlData.status = resp.Status
+	return urlData, nil
 }

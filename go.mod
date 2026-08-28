@@ -1,3 +1,3 @@
-module github.com/eadmtr/pinger
+module pinger
 
 go 1.26.5
